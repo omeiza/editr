@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: editr-postgres
+    environment:
+      POSTGRES_DB: editr
+      POSTGRES_USER: editr
+      POSTGRES_PASSWORD: editr
+    ports:
+      - "5433:5432"
+    volumes:
+      - editr-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  editr-postgres-data:

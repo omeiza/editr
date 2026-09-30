@@ -1,0 +1,8 @@
+CREATE TABLE documents (
+    id UUID PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    archived_at TIMESTAMP WITH TIME ZONE
+);
