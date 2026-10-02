@@ -14,6 +14,9 @@ public class Document {
     @Column(nullable = false)
     private String title;
 
+    @Column(nullable = false)
+    private String content = "";
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private DocumentStatus status;
@@ -49,6 +52,10 @@ public class Document {
         return title;
     }
 
+    public String getContent() {
+        return content;
+    }
+
     public DocumentStatus getStatus() {
         return status;
     }
@@ -63,5 +70,10 @@ public class Document {
 
     public OffsetDateTime getArchivedAt() {
         return archivedAt;
+    }
+
+    public void updateContent(String content) {
+        this.content = content;
+        this.updatedAt = OffsetDateTime.now();
     }
 }

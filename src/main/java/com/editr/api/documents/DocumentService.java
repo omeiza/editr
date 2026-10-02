@@ -92,4 +92,11 @@ public class DocumentService {
 
         return document.get();
     }
+
+    @Transactional
+    public Document updateContent(UUID id, String token, String content) {
+        Document document = getDocument(id, token);
+        document.updateContent(content);
+        return document;
+    }
 }

@@ -4,6 +4,9 @@ import java.util.UUID;
 import java.time.Duration;
 
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
+
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -61,6 +64,24 @@ public class DocumentController {
         response.setHeader("Cache-Control", "no-store");
 
         Document document = documentService.getDocument(id, token);
+        return StartDocumentResponse.from(document);
+    }
+
+    @PutMapping("/{id}/content")
+    public StartDocumentResponse updateContent(
+            @PathVariable("id") UUID id,
+            @CookieValue(name = "editr_session", required = false) String token,
+            @Valid @RequestBody UpdateDocumentContentRequest request,
+            HttpServletResponse response
+    ) {
+        response.setHeader("Cache-Control", "no-store");
+
+        Document document = documentService.updateContent(
+                id,
+                token,
+                request.content()
+        );
+
         return StartDocumentResponse.from(document);
     }
 }
