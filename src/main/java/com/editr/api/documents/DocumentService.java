@@ -2,6 +2,7 @@ package com.editr.api.documents;
 
 import com.editr.api.sessions.AnonymousSession;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -105,5 +106,17 @@ public class DocumentService {
         Document document = getDocument(id, token);
         document.rename(title);
         return document;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Document> listDocuments(String token) {
+        AnonymousSession session = anonymousSessionService
+                .findValidSession(token)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "A valid session is required"
+                ));
+
+        return documentRepository.findAccessibleDocuments(session.getId());
     }
 }

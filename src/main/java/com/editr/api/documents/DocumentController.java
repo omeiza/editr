@@ -2,6 +2,7 @@ package com.editr.api.documents;
 
 import java.util.UUID;
 import java.time.Duration;
+import java.util.List;
 
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -102,4 +103,16 @@ public class DocumentController {
         return StartDocumentResponse.from(document);
     }
 
+    @GetMapping
+    public List<StartDocumentResponse> listDocuments(
+            @CookieValue(name = "editr_session", required = false) String token,
+            HttpServletResponse response
+    ) {
+        response.setHeader("Cache-Control", "no-store");
+
+        return documentService.listDocuments(token)
+                .stream()
+                .map(StartDocumentResponse::from)
+                .toList();
+    }
 }

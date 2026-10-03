@@ -308,4 +308,80 @@ class DocumentCreationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("Untitled Document"));
     }
+
+    @Test
+    void sessionOnlyListsItsAccessibleDocuments() throws Exception {
+        // 1. Create the first document and keep its session cookie.
+        MvcResult firstResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String firstDocumentId = JsonPath.read(
+                firstResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        Cookie sessionCookie = firstResult.getResponse().getCookie("editr_session");
+        assertThat(sessionCookie).isNotNull();
+
+        // 2. Create another document using the same session.
+        MvcResult secondResult = mockMvc.perform(
+                        post("/api/documents/start")
+                                .cookie(sessionCookie))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String secondDocumentId = JsonPath.read(
+                secondResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        // 3. Create someone else's document by sending no cookie.
+        MvcResult otherResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String otherDocumentId = JsonPath.read(
+                otherResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        // 4. List documents belonging to the original session.
+        MvcResult listResult = mockMvc.perform(
+                        get("/api/documents")
+                                .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andReturn();
+
+        java.util.List<String> documentIds = JsonPath.read(
+                listResult.getResponse().getContentAsString(),
+                "$[*].id"
+        );
+
+        // 5. The list must contain exactly our two documents.
+        assertThat(documentIds)
+                .containsExactlyInAnyOrder(firstDocumentId, secondDocumentId)
+                .doesNotContain(otherDocumentId);
+    }
+
+    @Test
+    void listingDocumentsWithoutSessionIsRejected() throws Exception {
+        mockMvc.perform(get("/api/documents"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void listingDocumentsWithUnknownSessionIsRejected() throws Exception {
+        Cookie unknownCookie = new Cookie(
+                "editr_session",
+                "a".repeat(43)
+        );
+
+        mockMvc.perform(get("/api/documents")
+                        .cookie(unknownCookie))
+                .andExpect(status().isUnauthorized());
+    }
 }
