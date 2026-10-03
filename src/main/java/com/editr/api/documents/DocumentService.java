@@ -109,7 +109,7 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public List<Document> listDocuments(String token) {
+    public List<DocumentSummaryResponse> listDocuments(String token) {
         AnonymousSession session = anonymousSessionService
                 .findValidSession(token)
                 .orElseThrow(() -> new ResponseStatusException(

@@ -348,12 +348,17 @@ class DocumentCreationTests {
                 "$.id"
         );
 
-        // 4. List documents belonging to the original session.
+        // 4. List summaries belonging to the original session.
         MvcResult listResult = mockMvc.perform(
                         get("/api/documents")
                                 .cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$[0].title").value("Untitled Document"))
+                .andExpect(jsonPath("$[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$[0].createdAt").exists())
+                .andExpect(jsonPath("$[0].updatedAt").exists())
+                .andExpect(jsonPath("$[*].content").isEmpty())
                 .andReturn();
 
         java.util.List<String> documentIds = JsonPath.read(

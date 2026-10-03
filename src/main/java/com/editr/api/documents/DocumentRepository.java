@@ -24,7 +24,13 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
      */
 
     @Query("""
-        SELECT d
+        SELECT new com.editr.api.documents.DocumentSummaryResponse(
+            d.id,
+            d.title,
+            d.status,
+            d.createdAt,
+            d.updatedAt
+        )
         FROM Document d
         WHERE d.id IN (
             SELECT access.documentId
@@ -33,7 +39,7 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
         )
         ORDER BY d.updatedAt DESC, d.id ASC
         """)
-    List<Document> findAccessibleDocuments(
+    List<DocumentSummaryResponse> findAccessibleDocuments(
             @Param("sessionId") UUID sessionId
     );
 }

@@ -104,15 +104,12 @@ public class DocumentController {
     }
 
     @GetMapping
-    public List<StartDocumentResponse> listDocuments(
+    public List<DocumentSummaryResponse> listDocuments(
             @CookieValue(name = "editr_session", required = false) String token,
             HttpServletResponse response
     ) {
         response.setHeader("Cache-Control", "no-store");
 
-        return documentService.listDocuments(token)
-                .stream()
-                .map(StartDocumentResponse::from)
-                .toList();
+        return documentService.listDocuments(token);
     }
 }
