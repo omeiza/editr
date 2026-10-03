@@ -84,4 +84,22 @@ public class DocumentController {
 
         return StartDocumentResponse.from(document);
     }
+    @PutMapping("/{id}/title")
+    public StartDocumentResponse renameDocument(
+            @PathVariable("id") UUID id,
+            @CookieValue(name = "editr_session", required = false) String token,
+            @Valid @RequestBody UpdateDocumentTitleRequest request,
+            HttpServletResponse response
+    ) {
+        response.setHeader("Cache-Control", "no-store");
+
+        Document document = documentService.renameDocument(
+                id,
+                token,
+                request.title()
+        );
+
+        return StartDocumentResponse.from(document);
+    }
+
 }

@@ -156,4 +156,156 @@ class DocumentCreationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").value("The owner's text"));
     }
+
+    @Test
+    void creatorCanRenameAndReopenTheirDocument() throws Exception {
+        // 1. Create a document.
+        MvcResult creationResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String documentId = JsonPath.read(
+                creationResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        Cookie sessionCookie = creationResult.getResponse().getCookie("editr_session");
+        assertThat(sessionCookie).isNotNull();
+
+        // 2. Rename it using the creator's session.
+        mockMvc.perform(put("/api/documents/{id}/title", documentId)
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                              "title": "My first draft"
+                            }
+                            """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(documentId))
+                .andExpect(jsonPath("$.title").value("My first draft"));
+
+        // 3. Reopen it to verify that the new title was saved.
+        mockMvc.perform(get("/api/documents/{id}", documentId)
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("My first draft"));
+    }
+
+    @Test
+    void blankTitleIsRejected() throws Exception {
+        // 1. Create a document.
+        MvcResult creationResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String documentId = JsonPath.read(
+                creationResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        Cookie sessionCookie = creationResult.getResponse().getCookie("editr_session");
+        assertThat(sessionCookie).isNotNull();
+
+        // 2. Try to rename it to whitespace.
+        mockMvc.perform(put("/api/documents/{id}/title", documentId)
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                              "title": "   "
+                            }
+                            """))
+                .andExpect(status().isBadRequest());
+
+        // 3. Verify that the original title remains.
+        mockMvc.perform(get("/api/documents/{id}", documentId)
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Untitled Document"));
+    }
+
+    @Test
+    void titleLongerThan255CharactersIsRejected() throws Exception {
+        // 1. Create a document.
+        MvcResult creationResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String documentId = JsonPath.read(
+                creationResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        Cookie sessionCookie = creationResult.getResponse().getCookie("editr_session");
+        assertThat(sessionCookie).isNotNull();
+
+        // 2. Build a title one character over the limit.
+        String longTitle = "a".repeat(256);
+
+        String requestBody = """
+            {
+              "title": "%s"
+            }
+            """.formatted(longTitle);
+
+        // 3. Try to save the oversized title.
+        mockMvc.perform(put("/api/documents/{id}/title", documentId)
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest());
+
+        // 4. Verify that the original title remains.
+        mockMvc.perform(get("/api/documents/{id}", documentId)
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Untitled Document"));
+    }
+
+    @Test
+    void anotherSessionCannotRenameDocument() throws Exception {
+        // 1. Create the owner's document.
+        MvcResult ownerResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String documentId = JsonPath.read(
+                ownerResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        Cookie ownerCookie = ownerResult.getResponse().getCookie("editr_session");
+        assertThat(ownerCookie).isNotNull();
+
+        // 2. Create another session by sending no cookie.
+        MvcResult otherResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        Cookie otherCookie = otherResult.getResponse().getCookie("editr_session");
+        assertThat(otherCookie).isNotNull();
+
+        // 3. Try to rename the owner's document as the other session.
+        mockMvc.perform(put("/api/documents/{id}/title", documentId)
+                        .cookie(otherCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                              "title": "Someone else's title"
+                            }
+                            """))
+                .andExpect(status().isForbidden());
+
+        // 4. Verify that the title is unchanged.
+        mockMvc.perform(get("/api/documents/{id}", documentId)
+                        .cookie(ownerCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Untitled Document"));
+    }
 }

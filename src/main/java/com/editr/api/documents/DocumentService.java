@@ -99,4 +99,11 @@ public class DocumentService {
         document.updateContent(content);
         return document;
     }
+
+    @Transactional
+    public Document renameDocument(UUID id, String token, String title) {
+        Document document = getDocument(id, token);
+        document.rename(title);
+        return document;
+    }
 }

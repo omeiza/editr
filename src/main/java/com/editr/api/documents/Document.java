@@ -76,4 +76,9 @@ public class Document {
         this.content = content;
         this.updatedAt = OffsetDateTime.now();
     }
+
+    public void rename(String title) {
+        this.title = title;
+        this.updatedAt = OffsetDateTime.now();
+    }
 }
