@@ -81,4 +81,16 @@ public class Document {
         this.title = title;
         this.updatedAt = OffsetDateTime.now();
     }
+
+    public void archive() {
+        if (this.status == DocumentStatus.ARCHIVED) {
+            return;
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        this.status = DocumentStatus.ARCHIVED;
+        this.archivedAt = now;
+        this.updatedAt = now;
+    }
 }

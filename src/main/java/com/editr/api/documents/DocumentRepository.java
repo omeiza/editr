@@ -32,7 +32,8 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
             d.updatedAt
         )
         FROM Document d
-        WHERE d.id IN (
+        WHERE d.status = :status
+          AND d.id IN (
             SELECT access.documentId
             FROM DocumentAccess access
             WHERE access.sessionId = :sessionId
@@ -40,6 +41,7 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
         ORDER BY d.updatedAt DESC, d.id ASC
         """)
     List<DocumentSummaryResponse> findAccessibleDocuments(
-            @Param("sessionId") UUID sessionId
+            @Param("sessionId") UUID sessionId,
+            @Param("status") DocumentStatus status
     );
 }

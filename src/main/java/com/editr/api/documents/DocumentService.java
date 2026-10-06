@@ -117,6 +117,41 @@ public class DocumentService {
                         "A valid session is required"
                 ));
 
-        return documentRepository.findAccessibleDocuments(session.getId());
+        return documentRepository.findAccessibleDocuments(
+                session.getId(),
+                DocumentStatus.ACTIVE
+        );
+    }
+
+    @Transactional
+    public Document archiveDocument(UUID id, String token) {
+        AnonymousSession session = anonymousSessionService
+                .findValidSession(token)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "A valid session is required"
+                ));
+
+        boolean isOwner = documentAccessRepository.existsByDocumentIdAndSessionIdAndRole(
+                id,
+                session.getId(),
+                DocumentRole.OWNER
+        );
+
+        if (!isOwner) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Only the document owner can archive this document"
+            );
+        }
+
+        Document document = documentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Document not found"
+                ));
+
+        document.archive();
+        return document;
     }
 }

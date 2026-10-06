@@ -112,4 +112,17 @@ public class DocumentController {
 
         return documentService.listDocuments(token);
     }
+
+    @PutMapping("/{id}/archive")
+    public StartDocumentResponse archiveDocument(
+            @PathVariable("id") UUID id,
+            @CookieValue(name = "editr_session", required = false) String token,
+            HttpServletResponse response
+    ) {
+        response.setHeader("Cache-Control", "no-store");
+
+        Document document = documentService.archiveDocument(id, token);
+
+        return StartDocumentResponse.from(document);
+    }
 }

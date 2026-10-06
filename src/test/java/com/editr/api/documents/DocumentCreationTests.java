@@ -1,7 +1,10 @@
 package com.editr.api.documents;
+import com.editr.api.sessions.AnonymousSessionService;
+import java.util.UUID;
 
 import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +34,12 @@ class DocumentCreationTests {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private AnonymousSessionService anonymousSessionService;
+
+    @Autowired
+    private DocumentAccessRepository documentAccessRepository;
 
     @Test
     void creatorCanSaveAndReopenTheirDocument() throws Exception {
@@ -388,5 +397,140 @@ class DocumentCreationTests {
         mockMvc.perform(get("/api/documents")
                         .cookie(unknownCookie))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void ownerCanArchiveDocumentWithoutLosingContent() throws Exception {
+        // 1. Create a document and keep the owner's session cookie.
+        MvcResult creationResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String documentId = JsonPath.read(
+                creationResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        Cookie sessionCookie = creationResult.getResponse().getCookie("editr_session");
+        assertThat(sessionCookie).isNotNull();
+
+        // 2. Save some text.
+        mockMvc.perform(put("/api/documents/{id}/content", documentId)
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                              "content": "Keep this text."
+                            }
+                            """))
+                .andExpect(status().isOk());
+
+        // 3. Archive the document.
+        mockMvc.perform(put("/api/documents/{id}/archive", documentId)
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ARCHIVED"));
+
+        // 4. It should no longer appear in the active list.
+        mockMvc.perform(get("/api/documents")
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+
+        // 5. It should still be accessible directly, with its text intact.
+        mockMvc.perform(get("/api/documents/{id}", documentId)
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ARCHIVED"))
+                .andExpect(jsonPath("$.content").value("Keep this text."));
+    }
+
+    @Test
+    void anotherSessionCannotArchiveDocument() throws Exception {
+        // 1. Create the owner's document.
+        MvcResult ownerResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String documentId = JsonPath.read(
+                ownerResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        Cookie ownerCookie = ownerResult.getResponse().getCookie("editr_session");
+        assertThat(ownerCookie).isNotNull();
+
+        // 2. Create a separate session by sending no cookie.
+        MvcResult otherResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        Cookie otherCookie = otherResult.getResponse().getCookie("editr_session");
+        assertThat(otherCookie).isNotNull();
+
+        // 3. Try to archive the owner's document as the other session.
+        mockMvc.perform(put("/api/documents/{id}/archive", documentId)
+                        .cookie(otherCookie))
+                .andExpect(status().isForbidden());
+
+        // 4. Verify that the document is still active.
+        mockMvc.perform(get("/api/documents/{id}", documentId)
+                        .cookie(ownerCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+
+        // 5. Verify that it still appears in the owner's active list.
+        mockMvc.perform(get("/api/documents")
+                        .cookie(ownerCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(documentId));
+    }
+
+    @Test
+    void editorCannotArchiveDocument() throws Exception {
+        // 1. Create a document belonging to an owner.
+        MvcResult creationResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String documentId = JsonPath.read(
+                creationResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        // 2. Create a separate session and grant it editor access.
+        AnonymousSessionService.CreatedSession editor = anonymousSessionService.createSession();
+
+        documentAccessRepository.save(new DocumentAccess(
+                UUID.fromString(documentId),
+                editor.session().getId(),
+                DocumentRole.EDITOR
+        ));
+
+        Cookie editorCookie = new Cookie(
+                "editr_session",
+                editor.token()
+        );
+
+        // 3. Confirm that the editor can read the document.
+        mockMvc.perform(get("/api/documents/{id}", documentId)
+                        .cookie(editorCookie))
+                .andExpect(status().isOk());
+
+        // 4. The editor must not be allowed to archive it.
+        mockMvc.perform(put("/api/documents/{id}/archive", documentId)
+                        .cookie(editorCookie))
+                .andExpect(status().isForbidden());
+
+        // 5. Confirm that the document remains active.
+        mockMvc.perform(get("/api/documents/{id}", documentId)
+                        .cookie(editorCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
     }
 }
