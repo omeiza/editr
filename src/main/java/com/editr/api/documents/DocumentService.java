@@ -28,6 +28,39 @@ public class DocumentService {
         this.anonymousSessionService = anonymousSessionService;
     }
 
+    private Document getOwnedDocument(
+            UUID id,
+            String token,
+            String forbiddenMessage
+    ) {
+        AnonymousSession session = anonymousSessionService
+                .findValidSession(token)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "A valid session is required"
+                ));
+
+        boolean isOwner =
+                documentAccessRepository.existsByDocumentIdAndSessionIdAndRole(
+                        id,
+                        session.getId(),
+                        DocumentRole.OWNER
+                );
+
+        if (!isOwner) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    forbiddenMessage
+            );
+        }
+
+        return documentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Document not found"
+                ));
+    }
+
     @Transactional
     public StartedDocument startDocument(String token) {
         Optional<AnonymousSession> existingSession =
@@ -128,31 +161,11 @@ public class DocumentService {
 
     @Transactional
     public Document archiveDocument(UUID id, String token) {
-        AnonymousSession session = anonymousSessionService
-                .findValidSession(token)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.UNAUTHORIZED,
-                        "A valid session is required"
-                ));
-
-        boolean isOwner = documentAccessRepository.existsByDocumentIdAndSessionIdAndRole(
+        Document document = getOwnedDocument(
                 id,
-                session.getId(),
-                DocumentRole.OWNER
+                token,
+                "Only the document owner can archive this document"
         );
-
-        if (!isOwner) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Only the document owner can archive this document"
-            );
-        }
-
-        Document document = documentRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Document not found"
-                ));
 
         document.archive();
         return document;
@@ -160,31 +173,11 @@ public class DocumentService {
 
     @Transactional
     public Document restoreDocument(UUID id, String token) {
-        AnonymousSession session = anonymousSessionService
-                .findValidSession(token)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.UNAUTHORIZED,
-                        "A valid session is required"
-                ));
-
-        boolean isOwner = documentAccessRepository.existsByDocumentIdAndSessionIdAndRole(
+        Document document = getOwnedDocument(
                 id,
-                session.getId(),
-                DocumentRole.OWNER
+                token,
+                "Only the document owner can archive this document"
         );
-
-        if (!isOwner) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Only the document owner can restore this document"
-            );
-        }
-
-        Document document = documentRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Document not found"
-                ));
 
         document.restore();
         return document;
