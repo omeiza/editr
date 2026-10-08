@@ -36,7 +36,6 @@ public class DocumentController {
             HttpServletResponse response
     ) {
         response.setHeader("Cache-Control", "no-store");
-
         StartedDocument result = documentService.startDocument(token);
 
         if (result.newSessionToken() != null) {
@@ -63,8 +62,8 @@ public class DocumentController {
             HttpServletResponse response
     ) {
         response.setHeader("Cache-Control", "no-store");
-
         Document document = documentService.getDocument(id, token);
+
         return StartDocumentResponse.from(document);
     }
 
@@ -76,7 +75,6 @@ public class DocumentController {
             HttpServletResponse response
     ) {
         response.setHeader("Cache-Control", "no-store");
-
         Document document = documentService.updateContent(
                 id,
                 token,
@@ -93,7 +91,6 @@ public class DocumentController {
             HttpServletResponse response
     ) {
         response.setHeader("Cache-Control", "no-store");
-
         Document document = documentService.renameDocument(
                 id,
                 token,
@@ -106,11 +103,13 @@ public class DocumentController {
     @GetMapping
     public List<DocumentSummaryResponse> listDocuments(
             @CookieValue(name = "editr_session", required = false) String token,
+            @RequestParam(name = "status", defaultValue = "ACTIVE")
+            DocumentStatus status,
             HttpServletResponse response
     ) {
         response.setHeader("Cache-Control", "no-store");
 
-        return documentService.listDocuments(token);
+        return documentService.listDocuments(token, status);
     }
 
     @PutMapping("/{id}/archive")
@@ -120,8 +119,19 @@ public class DocumentController {
             HttpServletResponse response
     ) {
         response.setHeader("Cache-Control", "no-store");
-
         Document document = documentService.archiveDocument(id, token);
+
+        return StartDocumentResponse.from(document);
+    }
+
+    @PutMapping("/{id}/restore")
+    public StartDocumentResponse restoreDocument(
+            @PathVariable("id") UUID id,
+            @CookieValue(name = "editr_session", required = false) String token,
+            HttpServletResponse response
+    ) {
+        response.setHeader("Cache-Control", "no-store");
+        Document document = documentService.restoreDocument(id, token);
 
         return StartDocumentResponse.from(document);
     }

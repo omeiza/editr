@@ -93,4 +93,14 @@ public class Document {
         this.archivedAt = now;
         this.updatedAt = now;
     }
+
+    public void restore() {
+        if (this.status == DocumentStatus.ACTIVE) {
+            return;
+        }
+
+        this.status = DocumentStatus.ACTIVE;
+        this.archivedAt = null;
+        this.updatedAt = OffsetDateTime.now();
+    }
 }

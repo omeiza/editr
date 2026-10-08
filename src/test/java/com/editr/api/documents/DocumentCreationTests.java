@@ -533,4 +533,129 @@ class DocumentCreationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
     }
+
+    @Test
+    void ownerCanFindAndRestoreArchivedDocument() throws Exception {
+        // 1. Create a document.
+        MvcResult creationResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String documentId = JsonPath.read(
+                creationResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        Cookie sessionCookie = creationResult.getResponse().getCookie("editr_session");
+        assertThat(sessionCookie).isNotNull();
+
+        // 2. Save text before archiving.
+        mockMvc.perform(put("/api/documents/{id}/content", documentId)
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                              "content": "Keep this through restoration."
+                            }
+                            """))
+                .andExpect(status().isOk());
+
+        // 3. Archive the document.
+        mockMvc.perform(put("/api/documents/{id}/archive", documentId)
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk());
+
+        // 4. Find it in the archived list.
+        mockMvc.perform(get("/api/documents")
+                        .param("status", "ARCHIVED")
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(documentId))
+                .andExpect(jsonPath("$[0].status").value("ARCHIVED"));
+
+        // 5. Restore it.
+        mockMvc.perform(put("/api/documents/{id}/restore", documentId)
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+
+        // 6. It should no longer appear in the archived list.
+        mockMvc.perform(get("/api/documents")
+                        .param("status", "ARCHIVED")
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+
+        // 7. It should appear in the default active list.
+        mockMvc.perform(get("/api/documents")
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(documentId))
+                .andExpect(jsonPath("$[0].status").value("ACTIVE"));
+
+        // 8. Reopening it should return the original text.
+        mockMvc.perform(get("/api/documents/{id}", documentId)
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content")
+                        .value("Keep this through restoration."));
+    }
+
+    @Test
+    void editorCannotRestoreDocument() throws Exception {
+        // 1. Create the owner's document.
+        MvcResult creationResult = mockMvc.perform(
+                        post("/api/documents/start"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String documentId = JsonPath.read(
+                creationResult.getResponse().getContentAsString(),
+                "$.id"
+        );
+
+        Cookie ownerCookie = creationResult.getResponse().getCookie("editr_session");
+        assertThat(ownerCookie).isNotNull();
+
+        // 2. Archive it as the owner.
+        mockMvc.perform(put("/api/documents/{id}/archive", documentId)
+                        .cookie(ownerCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ARCHIVED"));
+
+        // 3. Create another session with editor access.
+        AnonymousSessionService.CreatedSession editor =
+                anonymousSessionService.createSession();
+
+        documentAccessRepository.save(new DocumentAccess(
+                UUID.fromString(documentId),
+                editor.session().getId(),
+                DocumentRole.EDITOR
+        ));
+
+        Cookie editorCookie = new Cookie(
+                "editr_session",
+                editor.token()
+        );
+
+        // 4. Confirm the editor can read the archived document.
+        mockMvc.perform(get("/api/documents/{id}", documentId)
+                        .cookie(editorCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ARCHIVED"));
+
+        // 5. Try to restore it as the editor.
+        mockMvc.perform(put("/api/documents/{id}/restore", documentId)
+                        .cookie(editorCookie))
+                .andExpect(status().isForbidden());
+
+        // 6. Confirm it remains archived.
+        mockMvc.perform(get("/api/documents/{id}", documentId)
+                        .cookie(ownerCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ARCHIVED"));
+    }
 }

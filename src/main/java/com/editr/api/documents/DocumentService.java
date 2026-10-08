@@ -109,7 +109,10 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public List<DocumentSummaryResponse> listDocuments(String token) {
+    public List<DocumentSummaryResponse> listDocuments(
+            String token,
+            DocumentStatus status
+    ) {
         AnonymousSession session = anonymousSessionService
                 .findValidSession(token)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -119,7 +122,7 @@ public class DocumentService {
 
         return documentRepository.findAccessibleDocuments(
                 session.getId(),
-                DocumentStatus.ACTIVE
+                status
         );
     }
 
@@ -152,6 +155,38 @@ public class DocumentService {
                 ));
 
         document.archive();
+        return document;
+    }
+
+    @Transactional
+    public Document restoreDocument(UUID id, String token) {
+        AnonymousSession session = anonymousSessionService
+                .findValidSession(token)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "A valid session is required"
+                ));
+
+        boolean isOwner = documentAccessRepository.existsByDocumentIdAndSessionIdAndRole(
+                id,
+                session.getId(),
+                DocumentRole.OWNER
+        );
+
+        if (!isOwner) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Only the document owner can restore this document"
+            );
+        }
+
+        Document document = documentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Document not found"
+                ));
+
+        document.restore();
         return document;
     }
 }
